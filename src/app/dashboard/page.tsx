@@ -1188,17 +1188,11 @@ export default function Dashboard() {
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-gray-900 truncate">
-                                      {lead.code}
+                                      {lead.name || lead.code} - {lead.phone_number || 'Sem telefone'}
                                     </h3>
                                     <p className="text-sm text-gray-600 truncate">
                                       {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
                                     </p>
-                                    {lead.phone_number && (
-                                      <p className="text-sm text-gray-600 flex items-center mt-1">
-                                        <Phone className="w-3 h-3 mr-1" />
-                                        {lead.phone_number}
-                                      </p>
-                                    )}
                                   </div>
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)} flex-shrink-0`}>
                                     {lead.status}
