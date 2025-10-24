@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone } from 'lucide-react';
+import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -10,6 +10,8 @@ interface UserData {
   email: string;
   company?: string;
   phone?: string;
+  is_trial?: boolean;
+  next_payment?: string;
 }
 
 interface LeadContent {
@@ -241,6 +243,22 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateDaysUntilPayment = (nextPayment: string): number => {
+    const paymentDate = new Date(nextPayment);
+    const today = new Date();
+    const diffTime = paymentDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
+  };
+
+  const getUtmTags = (queryStringParameters: { [key: string]: any }): Array<{key: string, value: string}> => {
+    if (!queryStringParameters) return [];
+    
+    return Object.entries(queryStringParameters)
+      .filter(([key]) => key.toLowerCase().startsWith('utm_'))
+      .map(([key, value]) => ({ key, value: String(value) }));
   };
 
   const loadLeads = async (page: number = currentPage) => {
@@ -714,6 +732,21 @@ export default function Dashboard() {
               <h1 className="text-xl font-semibold text-gray-900">LeadManager</h1>
             </div>
             
+            {/* Trial Warning */}
+            {user?.is_trial && user?.next_payment && (
+              <div className="flex-1 mx-8">
+                <button
+                  onClick={() => router.push('/payments')}
+                  className="w-full bg-orange-100 border border-orange-200 rounded-lg px-4 py-2 flex items-center justify-center space-x-2 hover:bg-orange-200 transition-colors"
+                >
+                  <AlertTriangle className="w-4 h-4 text-orange-600" />
+                  <span className="text-orange-800 font-medium">
+                    Seu trial se encerra em {calculateDaysUntilPayment(user.next_payment)} dias
+                  </span>
+                </button>
+              </div>
+            )}
+            
             <div className="relative">
               <button
                 onClick={() => setShowMenu(!showMenu)}
@@ -883,58 +916,77 @@ export default function Dashboard() {
                           <p className="text-gray-500">Nenhum lead encontrado</p>
                         </div>
                       ) : (
-                        filteredLeads.map((lead) => (
-                          <div key={lead.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
-                               onClick={() => loadLeadDetail(lead.uuid)}>
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-4">
-                                  <div>
-                                    <h3 className="font-medium text-gray-900">
-                                      {lead.name || lead.content?.name || `Lead ${lead.code}`}
-                                    </h3>
-                                    <p className="text-sm text-gray-600">
-                                      {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
-                                    </p>
+                        filteredLeads.map((lead) => {
+                          const utmTags = getUtmTags(lead.queryStringParameters);
+                          
+                          return (
+                            <div key={lead.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                                 onClick={() => loadLeadDetail(lead.uuid)}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex-1">
+                                  <div className="flex items-center space-x-4">
+                                    <div>
+                                      <h3 className="font-medium text-gray-900">
+                                        {lead.name || lead.content?.name || `Lead ${lead.code}`}
+                                      </h3>
+                                      <p className="text-sm text-gray-600">
+                                        {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
+                                      </p>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
+                                      {lead.status}
+                                    </span>
                                   </div>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                                    {lead.status}
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                                  <span>Rate: {lead.rate}</span>
-                                  <span>•</span>
-                                  <span>Código: {lead.code}</span>
-                                  <span>•</span>
-                                  {lead.phone_number && (
-                                    <>
-                                      <span>Tel: {lead.phone_number}</span>
-                                      <span>•</span>
-                                    </>
+                                  
+                                  {/* UTM Tags */}
+                                  {utmTags.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {utmTags.map((tag, index) => (
+                                        <span
+                                          key={index}
+                                          className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800"
+                                        >
+                                          {tag.key}: {tag.value}
+                                        </span>
+                                      ))}
+                                    </div>
                                   )}
-                                  {lead.email && (
-                                    <>
-                                      <span>Email: {lead.email}</span>
-                                      <span>•</span>
-                                    </>
-                                  )}
-                                  <span className="flex items-center">
-                                    <Eye className="w-3 h-3 mr-1" />
-                                    {lead.access?.length || 0} acessos
-                                  </span>
-                                  <span>•</span>
-                                  <span className="flex items-center">
-                                    <Calendar className="w-3 h-3 mr-1" />
-                                    {formatDate(lead.created_at)}
-                                  </span>
+                                  
+                                  <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                                    <span>Rate: {lead.rate}</span>
+                                    <span>•</span>
+                                    <span>Código: {lead.code}</span>
+                                    <span>•</span>
+                                    {lead.phone_number && (
+                                      <>
+                                        <span>Tel: {lead.phone_number}</span>
+                                        <span>•</span>
+                                      </>
+                                    )}
+                                    {lead.email && (
+                                      <>
+                                        <span>Email: {lead.email}</span>
+                                        <span>•</span>
+                                      </>
+                                    )}
+                                    <span className="flex items-center">
+                                      <Eye className="w-3 h-3 mr-1" />
+                                      {lead.access?.length || 0} acessos
+                                    </span>
+                                    <span>•</span>
+                                    <span className="flex items-center">
+                                      <Calendar className="w-3 h-3 mr-1" />
+                                      {formatDate(lead.created_at)}
+                                    </span>
+                                  </div>
                                 </div>
+                                <button className="text-gray-400 hover:text-gray-600">
+                                  <ExternalLink className="w-5 h-5" />
+                                </button>
                               </div>
-                              <button className="text-gray-400 hover:text-gray-600">
-                                <ExternalLink className="w-5 h-5" />
-                              </button>
                             </div>
-                          </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
 
