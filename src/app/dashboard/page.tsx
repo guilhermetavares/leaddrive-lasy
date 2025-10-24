@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle } from 'lucide-react';
+import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -152,6 +152,8 @@ export default function Dashboard() {
   const [showSellerModal, setShowSellerModal] = useState(false);
   const [isEditingCampaign, setIsEditingCampaign] = useState(false);
   const [isEditingSeller, setIsEditingSeller] = useState(false);
+  const [isEditingLead, setIsEditingLead] = useState(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   
   // Pagination states for leads
   const [currentPage, setCurrentPage] = useState(1);
@@ -168,6 +170,11 @@ export default function Dashboard() {
   const [sellerCurrentPage, setSellerCurrentPage] = useState(1);
   const [sellerTotalPages, setSellerTotalPages] = useState(1);
   const [sellerHasNextPage, setSellerHasNextPage] = useState(false);
+  
+  // Filter states
+  const [phoneFilter, setPhoneFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [codeFilter, setCodeFilter] = useState('');
   
   // Campaign form state
   const [campaignForm, setCampaignForm] = useState({
@@ -188,6 +195,21 @@ export default function Dashboard() {
     password: '',
     active: true
   });
+
+  // Lead edit form state
+  const [leadEditForm, setLeadEditForm] = useState({
+    name: '',
+    phone_number: '',
+    status: '',
+    rate: 0
+  });
+
+  // Change password form state
+  const [changePasswordForm, setChangePasswordForm] = useState({
+    password: '',
+    new_password: '',
+    confirm_password: ''
+  });
   
   const router = useRouter();
 
@@ -198,7 +220,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadLeads();
-  }, [currentPage]);
+  }, [currentPage, phoneFilter, statusFilter, codeFilter]);
 
   useEffect(() => {
     if (activeTab === 'campanhas') {
@@ -261,6 +283,18 @@ export default function Dashboard() {
       .map(([key, value]) => ({ key, value: String(value) }));
   };
 
+  const buildLeadsUrl = () => {
+    const params = new URLSearchParams();
+    params.append('page', currentPage.toString());
+    params.append('limit', limit.toString());
+    
+    if (phoneFilter) params.append('phone_number', phoneFilter);
+    if (statusFilter) params.append('status', statusFilter);
+    if (codeFilter) params.append('code', codeFilter);
+    
+    return `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads?${params.toString()}`;
+  };
+
   const loadLeads = async (page: number = currentPage) => {
     try {
       setLeadsLoading(true);
@@ -270,7 +304,7 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads?page=${page}&limit=${limit}`, {
+      const response = await fetch(buildLeadsUrl(), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -427,12 +461,86 @@ export default function Dashboard() {
       if (response.ok) {
         const leadDetail = await response.json();
         setSelectedLead(leadDetail);
+        setLeadEditForm({
+          name: leadDetail.name || '',
+          phone_number: leadDetail.phone_number || '',
+          status: leadDetail.status || '',
+          rate: leadDetail.rate || 0
+        });
         setShowLeadDetail(true);
       } else {
         throw new Error('Falha ao carregar detalhes do lead');
       }
     } catch (error) {
       console.error('Erro ao carregar detalhes do lead:', error);
+    }
+  };
+
+  const handleEditLead = async () => {
+    try {
+      const token = localStorage.getItem('accessToken');
+      if (!token || !selectedLead) return;
+
+      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${selectedLead.uuid}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(leadEditForm)
+      });
+
+      if (response.ok) {
+        const updatedLead = await response.json();
+        setSelectedLead(updatedLead);
+        setIsEditingLead(false);
+        // Recarregar a lista de leads
+        loadLeads(currentPage);
+      } else {
+        throw new Error('Falha ao atualizar lead');
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar lead:', error);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    try {
+      if (changePasswordForm.new_password !== changePasswordForm.confirm_password) {
+        alert('Nova senha e confirmação não coincidem');
+        return;
+      }
+
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+
+      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/change-password', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          password: changePasswordForm.password,
+          new_password: changePasswordForm.new_password
+        })
+      });
+
+      if (response.ok) {
+        alert('Senha alterada com sucesso!');
+        setShowChangePasswordModal(false);
+        setChangePasswordForm({
+          password: '',
+          new_password: '',
+          confirm_password: ''
+        });
+      } else {
+        const errorData = await response.json();
+        alert(errorData.message || 'Erro ao alterar senha');
+      }
+    } catch (error) {
+      console.error('Erro ao alterar senha:', error);
+      alert('Erro ao alterar senha');
     }
   };
 
@@ -768,7 +876,17 @@ export default function Dashboard() {
                     <User className="w-4 h-4 mr-3" />
                     Minha conta
                   </button>
-                  <button className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left">
+                  <button 
+                    onClick={() => setShowChangePasswordModal(true)}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <Lock className="w-4 h-4 mr-3" />
+                    Alterar senha
+                  </button>
+                  <button 
+                    onClick={() => router.push('/payments')}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
                     <CreditCard className="w-4 h-4 mr-3" />
                     Pagamentos
                   </button>
@@ -902,6 +1020,44 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* Filters */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
+                    <input
+                      type="text"
+                      placeholder="Digite o telefone..."
+                      value={phoneFilter}
+                      onChange={(e) => setPhoneFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Todos os status</option>
+                      <option value="pending">Pending</option>
+                      <option value="viewed">Viewed</option>
+                      <option value="clicked">Clicked</option>
+                      <option value="converted">Converted</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
+                    <input
+                      type="text"
+                      placeholder="Digite o código..."
+                      value={codeFilter}
+                      onChange={(e) => setCodeFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+
                 {/* Leads List */}
                 {leadsLoading ? (
                   <div className="text-center py-12">
@@ -910,9 +1066,9 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
                       {filteredLeads.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="col-span-full text-center py-12">
                           <p className="text-gray-500">Nenhum lead encontrado</p>
                         </div>
                       ) : (
@@ -920,69 +1076,61 @@ export default function Dashboard() {
                           const utmTags = getUtmTags(lead.queryStringParameters);
                           
                           return (
-                            <div key={lead.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer"
+                            <div key={lead.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer transition-colors"
                                  onClick={() => loadLeadDetail(lead.uuid)}>
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-4">
-                                    <div>
-                                      <h3 className="font-medium text-gray-900">
-                                        {lead.name || lead.content?.name || `Lead ${lead.code}`}
-                                      </h3>
-                                      <p className="text-sm text-gray-600">
-                                        {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
-                                      </p>
-                                    </div>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)}`}>
-                                      {lead.status}
-                                    </span>
-                                  </div>
-                                  
-                                  {/* UTM Tags */}
-                                  {utmTags.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                      {utmTags.map((tag, index) => (
-                                        <span
-                                          key={index}
-                                          className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800"
-                                        >
-                                          {tag.key}: {tag.value}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                  
-                                  <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                                    <span>Rate: {lead.rate}</span>
-                                    <span>•</span>
-                                    <span>Código: {lead.code}</span>
-                                    <span>•</span>
+                              <div className="space-y-3">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1 min-w-0">
+                                    <h3 className="font-medium text-gray-900 truncate">
+                                      {lead.code}
+                                    </h3>
+                                    <p className="text-sm text-gray-600 truncate">
+                                      {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
+                                    </p>
                                     {lead.phone_number && (
-                                      <>
-                                        <span>Tel: {lead.phone_number}</span>
-                                        <span>•</span>
-                                      </>
+                                      <p className="text-sm text-gray-600 flex items-center mt-1">
+                                        <Phone className="w-3 h-3 mr-1" />
+                                        {lead.phone_number}
+                                      </p>
                                     )}
-                                    {lead.email && (
-                                      <>
-                                        <span>Email: {lead.email}</span>
-                                        <span>•</span>
-                                      </>
+                                  </div>
+                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)} flex-shrink-0`}>
+                                    {lead.status}
+                                  </span>
+                                </div>
+                                
+                                {/* UTM Tags */}
+                                {utmTags.length > 0 && (
+                                  <div className="flex flex-wrap gap-1">
+                                    {utmTags.slice(0, 3).map((tag, index) => (
+                                      <span
+                                        key={index}
+                                        className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800"
+                                      >
+                                        {tag.key}: {tag.value}
+                                      </span>
+                                    ))}
+                                    {utmTags.length > 3 && (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-600">
+                                        +{utmTags.length - 3}
+                                      </span>
                                     )}
+                                  </div>
+                                )}
+                                
+                                <div className="flex items-center justify-between text-xs text-gray-500">
+                                  <div className="flex items-center space-x-3">
+                                    <span>Rate: {lead.rate}</span>
                                     <span className="flex items-center">
                                       <Eye className="w-3 h-3 mr-1" />
-                                      {lead.access?.length || 0} acessos
-                                    </span>
-                                    <span>•</span>
-                                    <span className="flex items-center">
-                                      <Calendar className="w-3 h-3 mr-1" />
-                                      {formatDate(lead.created_at)}
+                                      {lead.access?.length || 0}
                                     </span>
                                   </div>
+                                  <span className="flex items-center">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {formatDate(lead.created_at)}
+                                  </span>
                                 </div>
-                                <button className="text-gray-400 hover:text-gray-600">
-                                  <ExternalLink className="w-5 h-5" />
-                                </button>
                               </div>
                             </div>
                           );
@@ -1095,51 +1243,52 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
                       {filteredCampaigns.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="col-span-full text-center py-12">
                           <p className="text-gray-500">Nenhuma campanha encontrada</p>
                         </div>
                       ) : (
                         filteredCampaigns.map((campaign) => (
-                          <div key={campaign.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-4">
-                                  <div>
-                                    <h3 className="font-medium text-gray-900">{campaign.name}</h3>
-                                    <p className="text-sm text-gray-600">
-                                      {campaign.phone} • {campaign.message.substring(0, 50)}...
-                                    </p>
-                                  </div>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    campaign.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {campaign.active ? 'Ativa' : 'Inativa'}
-                                  </span>
+                          <div key={campaign.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-medium text-gray-900 truncate">{campaign.name}</h3>
+                                  <p className="text-sm text-gray-600 truncate">
+                                    {campaign.phone}
+                                  </p>
+                                  <p className="text-sm text-gray-600 truncate mt-1">
+                                    {campaign.message.substring(0, 50)}...
+                                  </p>
                                 </div>
-                                <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                                  <span className="flex items-center">
-                                    <Calendar className="w-3 h-3 mr-1" />
-                                    {formatDate(campaign.created_at)}
-                                  </span>
-                                  <span>•</span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                                  campaign.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {campaign.active ? 'Ativa' : 'Inativa'}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span className="flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  {formatDate(campaign.created_at)}
+                                </span>
+                                <div className="flex items-center space-x-2">
                                   <button 
                                     onClick={() => copyScriptUrl(campaign.script)}
                                     className="flex items-center text-blue-600 hover:text-blue-800"
                                   >
                                     <Copy className="w-3 h-3 mr-1" />
-                                    Copiar Script
+                                    Script
+                                  </button>
+                                  <button 
+                                    onClick={() => loadCampaignDetail(campaign.uuid)}
+                                    className="text-gray-400 hover:text-gray-600"
+                                  >
+                                    <Edit className="w-4 h-4" />
                                   </button>
                                 </div>
-                              </div>
-                              <div className="flex items-center space-x-2">
-                                <button 
-                                  onClick={() => loadCampaignDetail(campaign.uuid)}
-                                  className="text-gray-400 hover:text-gray-600"
-                                >
-                                  <Edit className="w-5 h-5" />
-                                </button>
                               </div>
                             </div>
                           </div>
@@ -1251,52 +1400,42 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
                       {filteredSellers.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="col-span-full text-center py-12">
                           <p className="text-gray-500">Nenhum vendedor encontrado</p>
                         </div>
                       ) : (
                         filteredSellers.map((seller) => (
-                          <div key={seller.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <div className="flex items-center space-x-4">
-                                  <div>
-                                    <h3 className="font-medium text-gray-900">{seller.name}</h3>
-                                    <p className="text-sm text-gray-600">
-                                      {seller.email} • {seller.phone}
-                                    </p>
-                                  </div>
-                                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                    seller.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                                  }`}>
-                                    {seller.active ? 'Ativo' : 'Inativo'}
-                                  </span>
-                                </div>
-                                <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                                  <span className="flex items-center">
-                                    <Mail className="w-3 h-3 mr-1" />
+                          <div key={seller.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-medium text-gray-900 truncate">{seller.name}</h3>
+                                  <p className="text-sm text-gray-600 truncate">
                                     {seller.email}
-                                  </span>
-                                  <span>•</span>
-                                  <span className="flex items-center">
-                                    <Phone className="w-3 h-3 mr-1" />
+                                  </p>
+                                  <p className="text-sm text-gray-600 truncate">
                                     {seller.phone}
-                                  </span>
-                                  <span>•</span>
-                                  <span className="flex items-center">
-                                    <Calendar className="w-3 h-3 mr-1" />
-                                    {formatDate(seller.created_at)}
-                                  </span>
+                                  </p>
                                 </div>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                                  seller.active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {seller.active ? 'Ativo' : 'Inativo'}
+                                </span>
                               </div>
-                              <div className="flex items-center space-x-2">
+                              
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span className="flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  {formatDate(seller.created_at)}
+                                </span>
                                 <button 
                                   onClick={() => loadSellerDetail(seller.uuid)}
                                   className="text-gray-400 hover:text-gray-600"
                                 >
-                                  <Edit className="w-5 h-5" />
+                                  <Edit className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
@@ -1362,6 +1501,75 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-md w-full">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Alterar Senha</h2>
+                <button
+                  onClick={() => setShowChangePasswordModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Senha Atual</label>
+                <input
+                  type="password"
+                  value={changePasswordForm.password}
+                  onChange={(e) => setChangePasswordForm({...changePasswordForm, password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Digite sua senha atual"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nova Senha</label>
+                <input
+                  type="password"
+                  value={changePasswordForm.new_password}
+                  onChange={(e) => setChangePasswordForm({...changePasswordForm, new_password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Digite sua nova senha"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Nova Senha</label>
+                <input
+                  type="password"
+                  value={changePasswordForm.confirm_password}
+                  onChange={(e) => setChangePasswordForm({...changePasswordForm, confirm_password: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Confirme sua nova senha"
+                />
+              </div>
+            </div>
+            
+            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => setShowChangePasswordModal(false)}
+                className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleChangePassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Alterar Senha
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Campaign Modal */}
       {showCampaignModal && (
@@ -1582,14 +1790,42 @@ export default function Dashboard() {
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h2 className="text-xl font-semibold text-gray-900">
-                  Detalhes do Lead - {selectedLead.name || selectedLead.content?.name || selectedLead.code}
+                  Detalhes do Lead - {selectedLead.code}
                 </h2>
-                <button
-                  onClick={() => setShowLeadDetail(false)}
-                  className="text-gray-400 hover:text-gray-600"
-                >
-                  ✕
-                </button>
+                <div className="flex items-center space-x-2">
+                  {!isEditingLead ? (
+                    <button
+                      onClick={() => setIsEditingLead(true)}
+                      className="flex items-center px-3 py-2 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100"
+                    >
+                      <Edit className="w-4 h-4 mr-2" />
+                      Editar
+                    </button>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={handleEditLead}
+                        className="flex items-center px-3 py-2 text-white bg-green-600 rounded-lg hover:bg-green-700"
+                      >
+                        <Save className="w-4 h-4 mr-2" />
+                        Salvar
+                      </button>
+                      <button
+                        onClick={() => setIsEditingLead(false)}
+                        className="flex items-center px-3 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancelar
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowLeadDetail(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -1600,24 +1836,36 @@ export default function Dashboard() {
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Informações Gerais</h3>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm font-medium text-gray-500">ID</label>
-                      <p className="text-gray-900">{selectedLead.code}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Rate</label>
-                      <p className="text-gray-900">{selectedLead.rate}</p>
-                    </div>
-                    <div>
                       <label className="text-sm font-medium text-gray-500">Código</label>
                       <p className="text-gray-900">{selectedLead.code}</p>
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Nome</label>
-                      <p className="text-gray-900">{selectedLead.name || selectedLead.content?.name || '-'}</p>
+                      {isEditingLead ? (
+                        <input
+                          type="text"
+                          value={leadEditForm.name}
+                          onChange={(e) => setLeadEditForm({...leadEditForm, name: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Nome do lead"
+                        />
+                      ) : (
+                        <p className="text-gray-900">{selectedLead.name || '-'}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Telefone</label>
-                      <p className="text-gray-900">{selectedLead.phone_number || '-'}</p>
+                      {isEditingLead ? (
+                        <input
+                          type="text"
+                          value={leadEditForm.phone_number}
+                          onChange={(e) => setLeadEditForm({...leadEditForm, phone_number: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Telefone do lead"
+                        />
+                      ) : (
+                        <p className="text-gray-900">{selectedLead.phone_number || '-'}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Email</label>
@@ -1625,9 +1873,36 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Status</label>
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedLead.status)}`}>
-                        {selectedLead.status}
-                      </span>
+                      {isEditingLead ? (
+                        <select
+                          value={leadEditForm.status}
+                          onChange={(e) => setLeadEditForm({...leadEditForm, status: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="viewed">Viewed</option>
+                          <option value="clicked">Clicked</option>
+                          <option value="converted">Converted</option>
+                        </select>
+                      ) : (
+                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedLead.status)}`}>
+                          {selectedLead.status}
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Rate</label>
+                      {isEditingLead ? (
+                        <input
+                          type="number"
+                          value={leadEditForm.rate}
+                          onChange={(e) => setLeadEditForm({...leadEditForm, rate: Number(e.target.value)})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          placeholder="Rate do lead"
+                        />
+                      ) : (
+                        <p className="text-gray-900">{selectedLead.rate}</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Criado em</label>
