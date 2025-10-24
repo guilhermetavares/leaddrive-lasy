@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock } from 'lucide-react';
+import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star } from 'lucide-react';
 
 interface UserData {
   id: string;
@@ -154,6 +154,7 @@ export default function Dashboard() {
   const [isEditingSeller, setIsEditingSeller] = useState(false);
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   
   // Pagination states for leads
   const [currentPage, setCurrentPage] = useState(1);
@@ -175,6 +176,9 @@ export default function Dashboard() {
   const [phoneFilter, setPhoneFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [codeFilter, setCodeFilter] = useState('');
+  const [utmFilter, setUtmFilter] = useState('');
+  const [startDateFilter, setStartDateFilter] = useState('');
+  const [endDateFilter, setEndDateFilter] = useState('');
   
   // Campaign form state
   const [campaignForm, setCampaignForm] = useState({
@@ -220,7 +224,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadLeads();
-  }, [currentPage, phoneFilter, statusFilter, codeFilter]);
+  }, [currentPage, phoneFilter, statusFilter, codeFilter, utmFilter, startDateFilter, endDateFilter]);
 
   useEffect(() => {
     if (activeTab === 'campanhas') {
@@ -291,6 +295,9 @@ export default function Dashboard() {
     if (phoneFilter) params.append('phone_number', phoneFilter);
     if (statusFilter) params.append('status', statusFilter);
     if (codeFilter) params.append('code', codeFilter);
+    if (utmFilter) params.append('utm', utmFilter);
+    if (startDateFilter) params.append('created_at__starts', startDateFilter);
+    if (endDateFilter) params.append('created_end__starts', endDateFilter);
     
     return `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads?${params.toString()}`;
   };
@@ -782,6 +789,72 @@ export default function Dashboard() {
     }
   };
 
+  const renderStars = (rate: number) => {
+    const stars = [];
+    const maxStars = 5;
+    const filledStars = Math.min(Math.max(Math.round(rate), 0), maxStars);
+    
+    for (let i = 0; i < maxStars; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`w-4 h-4 ${
+            i < filledStars 
+              ? 'text-yellow-400 fill-current' 
+              : 'text-gray-300'
+          }`}
+        />
+      );
+    }
+    
+    return <div className="flex items-center space-x-1">{stars}</div>;
+  };
+
+  const renderStatusPipeline = (status: string) => {
+    const stages = ['pending', 'viewed', 'clicked', 'converted'];
+    const stageLabels = {
+      pending: 'Pendente',
+      viewed: 'Visualizado',
+      clicked: 'Clicado',
+      converted: 'Convertido'
+    };
+    
+    const currentStageIndex = stages.indexOf(status.toLowerCase());
+    
+    return (
+      <div className="flex items-center space-x-2">
+        {stages.map((stage, index) => {
+          const isActive = index <= currentStageIndex;
+          const isCurrent = index === currentStageIndex;
+          
+          return (
+            <div key={stage} className="flex items-center">
+              <div
+                className={`w-3 h-3 rounded-full border-2 ${
+                  isActive
+                    ? isCurrent
+                      ? 'bg-blue-600 border-blue-600'
+                      : 'bg-green-500 border-green-500'
+                    : 'bg-gray-200 border-gray-300'
+                }`}
+              />
+              {index < stages.length - 1 && (
+                <div
+                  className={`w-8 h-0.5 ${
+                    isActive ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+        <span className="ml-2 text-sm font-medium text-gray-700">
+          {stageLabels[status.toLowerCase() as keyof typeof stageLabels] || status}
+        </span>
+      </div>
+    );
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
@@ -837,7 +910,7 @@ export default function Dashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-gray-900">LeadManager</h1>
+              <h1 className="text-xl font-semibold text-gray-900">LeaDrive</h1>
             </div>
             
             {/* Trial Warning */}
@@ -1001,7 +1074,10 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="flex space-x-3">
-                    <button className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button 
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
                       <Filter className="w-4 h-4 mr-2" />
                       Filtros
                     </button>
@@ -1021,42 +1097,72 @@ export default function Dashboard() {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
-                    <input
-                      type="text"
-                      placeholder="Digite o telefone..."
-                      value={phoneFilter}
-                      onChange={(e) => setPhoneFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                {showFilters && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o telefone..."
+                        value={phoneFilter}
+                        onChange={(e) => setPhoneFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Todos os status</option>
+                        <option value="pending">Pending</option>
+                        <option value="viewed">Viewed</option>
+                        <option value="clicked">Clicked</option>
+                        <option value="converted">Converted</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o código..."
+                        value={codeFilter}
+                        onChange={(e) => setCodeFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por UTM</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o UTM..."
+                        value={utmFilter}
+                        onChange={(e) => setUtmFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
+                      <input
+                        type="date"
+                        value={startDateFilter}
+                        onChange={(e) => setStartDateFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
+                      <input
+                        type="date"
+                        value={endDateFilter}
+                        onChange={(e) => setEndDateFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Todos os status</option>
-                      <option value="pending">Pending</option>
-                      <option value="viewed">Viewed</option>
-                      <option value="clicked">Clicked</option>
-                      <option value="converted">Converted</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
-                    <input
-                      type="text"
-                      placeholder="Digite o código..."
-                      value={codeFilter}
-                      onChange={(e) => setCodeFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
+                )}
 
                 {/* Leads List */}
                 {leadsLoading ? (
@@ -1830,7 +1936,7 @@ export default function Dashboard() {
             </div>
             
             <div className="p-6 space-y-6">
-              {/* Lead Info */}
+              {/* Lead Info - 2 columns */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-4">Informações Gerais</h3>
@@ -1871,6 +1977,11 @@ export default function Dashboard() {
                       <label className="text-sm font-medium text-gray-500">Email</label>
                       <p className="text-gray-900">{selectedLead.email || '-'}</p>
                     </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="space-y-3">
                     <div>
                       <label className="text-sm font-medium text-gray-500">Status</label>
                       {isEditingLead ? (
@@ -1885,9 +1996,9 @@ export default function Dashboard() {
                           <option value="converted">Converted</option>
                         </select>
                       ) : (
-                        <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(selectedLead.status)}`}>
-                          {selectedLead.status}
-                        </span>
+                        <div className="mt-2">
+                          {renderStatusPipeline(selectedLead.status)}
+                        </div>
                       )}
                     </div>
                     <div>
@@ -1901,7 +2012,9 @@ export default function Dashboard() {
                           placeholder="Rate do lead"
                         />
                       ) : (
-                        <p className="text-gray-900">{selectedLead.rate}</p>
+                        <div className="mt-2">
+                          {renderStars(selectedLead.rate)}
+                        </div>
                       )}
                     </div>
                     <div>
@@ -1914,64 +2027,9 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">Informações do Dispositivo</h3>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">País</label>
-                      <p className="text-gray-900">{selectedLead.location?.country}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Cidade</label>
-                      <p className="text-gray-900">{selectedLead.location?.city}, {selectedLead.location?.region}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">IP</label>
-                      <p className="text-gray-900">{selectedLead.clientIp}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">ISP</label>
-                      <p className="text-gray-900">{selectedLead.location?.isp}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Dispositivo</label>
-                      <p className="text-gray-900">{selectedLead.agent?.device?.vendor} {selectedLead.agent?.device?.model}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Sistema Operacional</label>
-                      <p className="text-gray-900">{selectedLead.agent?.os?.name} {selectedLead.agent?.os?.version}</p>
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500">Navegador</label>
-                      <p className="text-gray-900">{selectedLead.agent?.browser?.name} {selectedLead.agent?.browser?.version}</p>
-                    </div>
-                  </div>
-                </div>
               </div>
 
-              {/* Access History */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Histórico de Acessos</h3>
-                <div className="space-y-2">
-                  {selectedLead.access?.map((access, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {access.page ? `Página: ${access.page}` : 'Acesso direto'}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {new Date(access.createdAt).toLocaleString('pt-BR')}
-                        </p>
-                      </div>
-                    </div>
-                  )) || (
-                    <p className="text-gray-500 text-sm">Nenhum acesso registrado</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Campaign Info */}
+              {/* Campaign Info - moved up */}
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Informações da Campanha</h3>
                 <div className="space-y-4">
@@ -2016,6 +2074,106 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Access History - Table format */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Histórico de Acessos</h3>
+                {selectedLead.access && selectedLead.access.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Página
+                          </th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Data/Hora
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-200">
+                        {selectedLead.access.map((access, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-2 text-sm text-gray-900">
+                              {access.page || 'Acesso direto'}
+                            </td>
+                            <td className="px-4 py-2 text-sm text-gray-500">
+                              {new Date(access.createdAt).toLocaleString('pt-BR')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-sm">Nenhum acesso registrado</p>
+                )}
+              </div>
+
+              {/* Device Info - Table format */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Informações do Dispositivo</h3>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Propriedade
+                        </th>
+                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Valor
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">País</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{selectedLead.location?.country || '-'}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">Cidade</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">
+                          {selectedLead.location?.city && selectedLead.location?.region 
+                            ? `${selectedLead.location.city}, ${selectedLead.location.region}` 
+                            : '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">IP</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{selectedLead.clientIp || '-'}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">ISP</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">{selectedLead.location?.isp || '-'}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">Dispositivo</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">
+                          {selectedLead.agent?.device?.vendor && selectedLead.agent?.device?.model
+                            ? `${selectedLead.agent.device.vendor} ${selectedLead.agent.device.model}`
+                            : '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">Sistema Operacional</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">
+                          {selectedLead.agent?.os?.name && selectedLead.agent?.os?.version
+                            ? `${selectedLead.agent.os.name} ${selectedLead.agent.os.version}`
+                            : '-'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-4 py-2 text-sm font-medium text-gray-900">Navegador</td>
+                        <td className="px-4 py-2 text-sm text-gray-500">
+                          {selectedLead.agent?.browser?.name && selectedLead.agent?.browser?.version
+                            ? `${selectedLead.agent.browser.name} ${selectedLead.agent.browser.version}`
+                            : '-'}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

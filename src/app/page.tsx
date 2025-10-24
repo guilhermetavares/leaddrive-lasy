@@ -14,7 +14,7 @@ export default function Home() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Target className="w-5 h-5 text-white" />
               </div>
-              <span className="ml-2 text-xl font-bold text-gray-900">LeadManager</span>
+              <span className="ml-2 text-xl font-bold text-gray-900">LeaDrive</span>
             </div>
             <nav className="hidden md:flex space-x-8">
               <a href="#funcionalidades" className="text-gray-600 hover:text-blue-600 transition-colors">Funcionalidades</a>
@@ -308,7 +308,7 @@ export default function Home() {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                 <Target className="w-5 h-5 text-white" />
               </div>
-              <span className="ml-2 text-xl font-bold">LeadManager</span>
+              <span className="ml-2 text-xl font-bold">LeaDrive</span>
             </div>
             <div className="flex space-x-6">
               <a href="#" className="text-gray-400 hover:text-white transition-colors">Termos</a>
@@ -317,7 +317,7 @@ export default function Home() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 LeadManager. Todos os direitos reservados.</p>
+            <p>&copy; 2024 LeaDrive. Todos os direitos reservados.</p>
           </div>
         </div>
       </footer>
