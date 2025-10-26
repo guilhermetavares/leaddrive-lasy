@@ -154,7 +154,6 @@ export default function Dashboard() {
   const [isEditingSeller, setIsEditingSeller] = useState(false);
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
-  const [showFilters, setShowFilters] = useState(false);
   
   // Pagination states for leads
   const [currentPage, setCurrentPage] = useState(1);
@@ -176,9 +175,6 @@ export default function Dashboard() {
   const [phoneFilter, setPhoneFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [codeFilter, setCodeFilter] = useState('');
-  const [utmFilter, setUtmFilter] = useState('');
-  const [startDateFilter, setStartDateFilter] = useState('');
-  const [endDateFilter, setEndDateFilter] = useState('');
   
   // Campaign form state
   const [campaignForm, setCampaignForm] = useState({
@@ -224,7 +220,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadLeads();
-  }, [currentPage, phoneFilter, statusFilter, codeFilter, utmFilter, startDateFilter, endDateFilter]);
+  }, [currentPage, phoneFilter, statusFilter, codeFilter]);
 
   useEffect(() => {
     if (activeTab === 'campanhas') {
@@ -295,9 +291,6 @@ export default function Dashboard() {
     if (phoneFilter) params.append('phone_number', phoneFilter);
     if (statusFilter) params.append('status', statusFilter);
     if (codeFilter) params.append('code', codeFilter);
-    if (utmFilter) params.append('utm', utmFilter);
-    if (startDateFilter) params.append('created_at__starts', startDateFilter);
-    if (endDateFilter) params.append('created_end__starts', endDateFilter);
     
     return `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads?${params.toString()}`;
   };
@@ -1074,10 +1067,7 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="flex space-x-3">
-                    <button 
-                      onClick={() => setShowFilters(!showFilters)}
-                      className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-                    >
+                    <button className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                       <Filter className="w-4 h-4 mr-2" />
                       Filtros
                     </button>
@@ -1097,72 +1087,42 @@ export default function Dashboard() {
                 </div>
 
                 {/* Filters */}
-                {showFilters && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
-                      <input
-                        type="text"
-                        placeholder="Digite o telefone..."
-                        value={phoneFilter}
-                        onChange={(e) => setPhoneFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
-                      <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Todos os status</option>
-                        <option value="pending">Pending</option>
-                        <option value="viewed">Viewed</option>
-                        <option value="clicked">Clicked</option>
-                        <option value="converted">Converted</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
-                      <input
-                        type="text"
-                        placeholder="Digite o código..."
-                        value={codeFilter}
-                        onChange={(e) => setCodeFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por UTM</label>
-                      <input
-                        type="text"
-                        placeholder="Digite o UTM..."
-                        value={utmFilter}
-                        onChange={(e) => setUtmFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Data inicial</label>
-                      <input
-                        type="date"
-                        value={startDateFilter}
-                        onChange={(e) => setStartDateFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Data final</label>
-                      <input
-                        type="date"
-                        value={endDateFilter}
-                        onChange={(e) => setEndDateFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
+                    <input
+                      type="text"
+                      placeholder="Digite o telefone..."
+                      value={phoneFilter}
+                      onChange={(e) => setPhoneFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
-                )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
+                    <select
+                      value={statusFilter}
+                      onChange={(e) => setStatusFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Todos os status</option>
+                      <option value="pending">Pending</option>
+                      <option value="viewed">Viewed</option>
+                      <option value="clicked">Clicked</option>
+                      <option value="converted">Converted</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
+                    <input
+                      type="text"
+                      placeholder="Digite o código..."
+                      value={codeFilter}
+                      onChange={(e) => setCodeFilter(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
 
                 {/* Leads List */}
                 {leadsLoading ? (
@@ -1188,11 +1148,17 @@ export default function Dashboard() {
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-gray-900 truncate">
-                                      {lead.name || lead.code} - {lead.phone_number || 'Sem telefone'}
+                                      {lead.code}
                                     </h3>
                                     <p className="text-sm text-gray-600 truncate">
                                       {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
                                     </p>
+                                    {lead.phone_number && (
+                                      <p className="text-sm text-gray-600 flex items-center mt-1">
+                                        <Phone className="w-3 h-3 mr-1" />
+                                        {lead.phone_number}
+                                      </p>
+                                    )}
                                   </div>
                                   <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(lead.status)} flex-shrink-0`}>
                                     {lead.status}
