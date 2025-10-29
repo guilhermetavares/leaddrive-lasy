@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star } from 'lucide-react';
+import { useApiCall } from '@/lib/api';
 
 interface UserData {
   id: string;
@@ -154,6 +155,7 @@ export default function Dashboard() {
   const [isEditingSeller, setIsEditingSeller] = useState(false);
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   
   // Pagination states for leads
   const [currentPage, setCurrentPage] = useState(1);
@@ -175,6 +177,9 @@ export default function Dashboard() {
   const [phoneFilter, setPhoneFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [codeFilter, setCodeFilter] = useState('');
+  const [utmFilter, setUtmFilter] = useState('');
+  const [dateStartFilter, setDateStartFilter] = useState('');
+  const [dateEndFilter, setDateEndFilter] = useState('');
   
   // Campaign form state
   const [campaignForm, setCampaignForm] = useState({
@@ -212,6 +217,7 @@ export default function Dashboard() {
   });
   
   const router = useRouter();
+  const { makeApiCall } = useApiCall();
 
   useEffect(() => {
     loadUserData();
@@ -220,7 +226,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadLeads();
-  }, [currentPage, phoneFilter, statusFilter, codeFilter]);
+  }, [currentPage, phoneFilter, statusFilter, codeFilter, utmFilter, dateStartFilter, dateEndFilter]);
 
   useEffect(() => {
     if (activeTab === 'campanhas') {
@@ -238,12 +244,8 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/me', {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -291,6 +293,9 @@ export default function Dashboard() {
     if (phoneFilter) params.append('phone_number', phoneFilter);
     if (statusFilter) params.append('status', statusFilter);
     if (codeFilter) params.append('code', codeFilter);
+    if (utmFilter) params.append('utm', utmFilter);
+    if (dateStartFilter) params.append('created_at__starts', dateStartFilter);
+    if (dateEndFilter) params.append('created_end__starts', dateEndFilter);
     
     return `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads?${params.toString()}`;
   };
@@ -304,12 +309,8 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch(buildLeadsUrl(), {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(buildLeadsUrl(), {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -356,12 +357,8 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns?page=${page}&limit=${limit}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns?page=${page}&limit=${limit}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -405,12 +402,8 @@ export default function Dashboard() {
         return;
       }
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers?page=${page}&limit=${limit}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers?page=${page}&limit=${limit}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -450,12 +443,8 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${leadUuid}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${leadUuid}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -481,12 +470,8 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token || !selectedLead) return;
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${selectedLead.uuid}`, {
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${selectedLead.uuid}`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(leadEditForm)
       });
 
@@ -514,12 +499,8 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
-      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/change-password', {
+      const response = await makeApiCall('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/change-password', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           password: changePasswordForm.password,
           new_password: changePasswordForm.new_password
@@ -549,12 +530,8 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns/${campaignUuid}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns/${campaignUuid}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -582,12 +559,8 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
-      const response = await fetch(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers/${sellerUuid}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers/${sellerUuid}`, {
+        method: 'GET'
       });
 
       if (response.ok) {
@@ -651,12 +624,8 @@ export default function Dashboard() {
       
       const method = isEditingCampaign ? 'PATCH' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await makeApiCall(url, {
         method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(campaignForm)
       });
 
@@ -682,12 +651,8 @@ export default function Dashboard() {
       
       const method = isEditingSeller ? 'PATCH' : 'POST';
 
-      const response = await fetch(url, {
+      const response = await makeApiCall(url, {
         method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify(sellerForm)
       });
 
@@ -1067,7 +1032,10 @@ export default function Dashboard() {
                     />
                   </div>
                   <div className="flex space-x-3">
-                    <button className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
+                    <button 
+                      onClick={() => setShowFilters(!showFilters)}
+                      className="flex items-center px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                    >
                       <Filter className="w-4 h-4 mr-2" />
                       Filtros
                     </button>
@@ -1087,42 +1055,72 @@ export default function Dashboard() {
                 </div>
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
-                    <input
-                      type="text"
-                      placeholder="Digite o telefone..."
-                      value={phoneFilter}
-                      onChange={(e) => setPhoneFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
+                {showFilters && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por telefone</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o telefone..."
+                        value={phoneFilter}
+                        onChange={(e) => setPhoneFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
+                      <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Todos os status</option>
+                        <option value="pending">Pending</option>
+                        <option value="viewed">Viewed</option>
+                        <option value="clicked">Clicked</option>
+                        <option value="converted">Converted</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o código..."
+                        value={codeFilter}
+                        onChange={(e) => setCodeFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por UTM</label>
+                      <input
+                        type="text"
+                        placeholder="Digite o valor UTM..."
+                        value={utmFilter}
+                        onChange={(e) => setUtmFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Data início</label>
+                      <input
+                        type="date"
+                        value={dateStartFilter}
+                        onChange={(e) => setDateStartFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Data fim</label>
+                      <input
+                        type="date"
+                        value={dateEndFilter}
+                        onChange={(e) => setDateEndFilter(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por status</label>
-                    <select
-                      value={statusFilter}
-                      onChange={(e) => setStatusFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Todos os status</option>
-                      <option value="pending">Pending</option>
-                      <option value="viewed">Viewed</option>
-                      <option value="clicked">Clicked</option>
-                      <option value="converted">Converted</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Filtrar por código</label>
-                    <input
-                      type="text"
-                      placeholder="Digite o código..."
-                      value={codeFilter}
-                      onChange={(e) => setCodeFilter(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
+                )}
 
                 {/* Leads List */}
                 {leadsLoading ? (
@@ -1148,7 +1146,7 @@ export default function Dashboard() {
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-gray-900 truncate">
-                                      {lead.code}
+                                      {lead.name ? `${lead.name} - ${lead.phone_number || 'Sem telefone'}` : `${lead.code} - ${lead.phone_number || 'Sem telefone'}`}
                                     </h3>
                                     <p className="text-sm text-gray-600 truncate">
                                       {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
