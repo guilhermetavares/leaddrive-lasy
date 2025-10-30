@@ -17,6 +17,13 @@ interface UserData {
   trial_expired?: boolean;
 }
 
+interface DashboardStats {
+  total_hists: number;
+  total_leads: number;
+  percent_leads: number;
+  totat_linked: number;
+}
+
 interface LeadContent {
   updated_at: string;
   phone: string;
@@ -162,6 +169,7 @@ export default function Dashboard() {
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [sellersLoading, setSellersLoading] = useState(false);
   const [plansLoading, setPlansLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('leads');
@@ -174,6 +182,14 @@ export default function Dashboard() {
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Dashboard stats from API
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
+    total_hists: 0,
+    total_leads: 0,
+    percent_leads: 0,
+    totat_linked: 0
+  });
   
   // Pagination states for leads
   const [currentPage, setCurrentPage] = useState(1);
@@ -240,6 +256,7 @@ export default function Dashboard() {
   useEffect(() => {
     loadUserData();
     loadLeads();
+    loadDashboardStats();
   }, []);
 
   useEffect(() => {
@@ -255,6 +272,30 @@ export default function Dashboard() {
       loadPlans();
     }
   }, [activeTab, campaignCurrentPage, sellerCurrentPage]);
+
+  const loadDashboardStats = async () => {
+    try {
+      setStatsLoading(true);
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+
+      const response = await makeApiCall('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/dashboard-home', {
+        method: 'GET'
+      });
+
+      if (response.ok) {
+        const stats: DashboardStats = await response.json();
+        setDashboardStats(stats);
+      } else {
+        throw new Error('Falha ao carregar estatísticas');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar estatísticas:', error);
+      // Manter valores padrão em caso de erro
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   const loadUserData = async () => {
     try {
@@ -947,13 +988,6 @@ export default function Dashboard() {
     plan.key?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const stats = {
-    totalLeads: leads.length,
-    clickedLeads: leads.filter(l => l.status === 'clicked').length,
-    totalAccesses: leads.reduce((acc, lead) => acc + (lead.access?.length || 0), 0),
-    conversionRate: leads.length > 0 ? Math.round((leads.filter(l => l.status === 'clicked').length / leads.length) * 100) : 0
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -1055,11 +1089,35 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
-                <Users className="w-6 h-6 text-blue-600" />
+                <Eye className="w-6 h-6 text-blue-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total de Leads</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalLeads}</p>
+                <p className="text-sm font-medium text-gray-600">Total de Acessos</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                  ) : (
+                    dashboardStats.total_hists.toLocaleString('pt-BR')
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <MousePointer className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div className="ml-4">
+                <p className="text-sm font-medium text-gray-600">Total de Clicados</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                  ) : (
+                    dashboardStats.total_leads.toLocaleString('pt-BR')
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -1071,19 +1129,13 @@ export default function Dashboard() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Taxa de Conversão</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.conversionRate}%</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-yellow-100 rounded-lg">
-                <MousePointer className="w-6 h-6 text-yellow-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Leads Clicados</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.clickedLeads}</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                  ) : (
+                    `${dashboardStats.percent_leads}%`
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -1091,11 +1143,17 @@ export default function Dashboard() {
           <div className="bg-white rounded-lg shadow p-6">
             <div className="flex items-center">
               <div className="p-2 bg-purple-100 rounded-lg">
-                <Eye className="w-6 h-6 text-purple-600" />
+                <Users className="w-6 h-6 text-purple-600" />
               </div>
               <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total de Acessos</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.totalAccesses}</p>
+                <p className="text-sm font-medium text-gray-600">Total de Leads</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {statsLoading ? (
+                    <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
+                  ) : (
+                    dashboardStats.totat_linked.toLocaleString('pt-BR')
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -1146,11 +1204,14 @@ export default function Dashboard() {
                       Filtros
                     </button>
                     <button 
-                      onClick={() => loadLeads(currentPage)}
+                      onClick={() => {
+                        loadLeads(currentPage);
+                        loadDashboardStats();
+                      }}
                       className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                      disabled={leadsLoading}
+                      disabled={leadsLoading || statsLoading}
                     >
-                      {leadsLoading ? (
+                      {(leadsLoading || statsLoading) ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                       ) : (
                         <Settings className="w-4 h-4 mr-2" />
