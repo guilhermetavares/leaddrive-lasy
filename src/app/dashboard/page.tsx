@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star } from 'lucide-react';
 import { useApiCall } from '@/lib/api';
+import { formatPhoneForDisplay, formatPhoneForApi, applyPhoneMask, isValidPhone } from '@/lib/phone-utils';
 
 interface UserData {
   id: string;
@@ -13,6 +14,7 @@ interface UserData {
   phone?: string;
   is_trial?: boolean;
   next_payment?: string;
+  trial_expired?: boolean;
 }
 
 interface LeadContent {
@@ -251,6 +253,12 @@ export default function Dashboard() {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
+        
+        // Verificar se o trial expirou
+        if (userData.trial_expired || (userData.is_trial && userData.next_payment && calculateDaysUntilPayment(userData.next_payment) <= 0)) {
+          router.push('/payments');
+          return;
+        }
       } else {
         throw new Error('Falha ao carregar dados do usuário');
       }
@@ -290,7 +298,11 @@ export default function Dashboard() {
     params.append('page', currentPage.toString());
     params.append('limit', limit.toString());
     
-    if (phoneFilter) params.append('phone_number', phoneFilter);
+    if (phoneFilter) {
+      // Converter telefone para formato da API antes de enviar
+      const phoneForApi = formatPhoneForApi(phoneFilter);
+      params.append('phone_number', phoneForApi);
+    }
     if (statusFilter) params.append('status', statusFilter);
     if (codeFilter) params.append('code', codeFilter);
     if (utmFilter) params.append('utm', utmFilter);
@@ -470,9 +482,15 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token || !selectedLead) return;
 
+      // Converter telefone para formato da API antes de enviar
+      const leadDataToSend = {
+        ...leadEditForm,
+        phone_number: leadEditForm.phone_number ? formatPhoneForApi(leadEditForm.phone_number) : leadEditForm.phone_number
+      };
+
       const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/leads/${selectedLead.uuid}`, {
         method: 'PATCH',
-        body: JSON.stringify(leadEditForm)
+        body: JSON.stringify(leadDataToSend)
       });
 
       if (response.ok) {
@@ -618,6 +636,12 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
+      // Converter telefone para formato da API antes de enviar
+      const campaignDataToSend = {
+        ...campaignForm,
+        phone: campaignForm.phone ? formatPhoneForApi(campaignForm.phone) : campaignForm.phone
+      };
+
       const url = isEditingCampaign 
         ? `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns/${selectedCampaign?.uuid}`
         : 'https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/campaigns';
@@ -626,7 +650,7 @@ export default function Dashboard() {
 
       const response = await makeApiCall(url, {
         method,
-        body: JSON.stringify(campaignForm)
+        body: JSON.stringify(campaignDataToSend)
       });
 
       if (response.ok) {
@@ -645,6 +669,12 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
+      // Converter telefone para formato da API antes de enviar
+      const sellerDataToSend = {
+        ...sellerForm,
+        phone: sellerForm.phone ? formatPhoneForApi(sellerForm.phone) : sellerForm.phone
+      };
+
       const url = isEditingSeller 
         ? `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers/${selectedSeller?.uuid}`
         : 'https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers';
@@ -653,7 +683,7 @@ export default function Dashboard() {
 
       const response = await makeApiCall(url, {
         method,
-        body: JSON.stringify(sellerForm)
+        body: JSON.stringify(sellerDataToSend)
       });
 
       if (response.ok) {
@@ -1146,7 +1176,7 @@ export default function Dashboard() {
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1 min-w-0">
                                     <h3 className="font-medium text-gray-900 truncate">
-                                      {lead.name ? `${lead.name} - ${lead.phone_number || 'Sem telefone'}` : `${lead.code} - ${lead.phone_number || 'Sem telefone'}`}
+                                      {lead.name ? `${lead.name} - ${lead.phone_number ? formatPhoneForDisplay(lead.phone_number) : 'Sem telefone'}` : `${lead.code} - ${lead.phone_number ? formatPhoneForDisplay(lead.phone_number) : 'Sem telefone'}`}
                                     </h3>
                                     <p className="text-sm text-gray-600 truncate">
                                       {lead.location?.city}, {lead.location?.region} - {lead.location?.country}
@@ -1154,7 +1184,7 @@ export default function Dashboard() {
                                     {lead.phone_number && (
                                       <p className="text-sm text-gray-600 flex items-center mt-1">
                                         <Phone className="w-3 h-3 mr-1" />
-                                        {lead.phone_number}
+                                        {formatPhoneForDisplay(lead.phone_number)}
                                       </p>
                                     )}
                                   </div>
@@ -1320,7 +1350,7 @@ export default function Dashboard() {
                                 <div className="flex-1 min-w-0">
                                   <h3 className="font-medium text-gray-900 truncate">{campaign.name}</h3>
                                   <p className="text-sm text-gray-600 truncate">
-                                    {campaign.phone}
+                                    {formatPhoneForDisplay(campaign.phone)}
                                   </p>
                                   <p className="text-sm text-gray-600 truncate mt-1">
                                     {campaign.message.substring(0, 50)}...
@@ -1480,7 +1510,7 @@ export default function Dashboard() {
                                     {seller.email}
                                   </p>
                                   <p className="text-sm text-gray-600 truncate">
-                                    {seller.phone}
+                                    {formatPhoneForDisplay(seller.phone)}
                                   </p>
                                 </div>
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
@@ -1670,9 +1700,9 @@ export default function Dashboard() {
                 <input
                   type="text"
                   value={campaignForm.phone}
-                  onChange={(e) => setCampaignForm({...campaignForm, phone: e.target.value})}
+                  onChange={(e) => setCampaignForm({...campaignForm, phone: applyPhoneMask(e.target.value)})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: +5516993491807"
+                  placeholder="+55 (16) 99349-1807"
                 />
               </div>
               
@@ -1776,9 +1806,9 @@ export default function Dashboard() {
                 <input
                   type="text"
                   value={sellerForm.phone}
-                  onChange={(e) => setSellerForm({...sellerForm, phone: e.target.value})}
+                  onChange={(e) => setSellerForm({...sellerForm, phone: applyPhoneMask(e.target.value)})}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: +5516993491807"
+                  placeholder="+55 (16) 99349-1807"
                 />
               </div>
               
@@ -1923,12 +1953,12 @@ export default function Dashboard() {
                         <input
                           type="text"
                           value={leadEditForm.phone_number}
-                          onChange={(e) => setLeadEditForm({...leadEditForm, phone_number: e.target.value})}
+                          onChange={(e) => setLeadEditForm({...leadEditForm, phone_number: applyPhoneMask(e.target.value)})}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Telefone do lead"
+                          placeholder="+55 (16) 99349-1807"
                         />
                       ) : (
-                        <p className="text-gray-900">{selectedLead.phone_number || '-'}</p>
+                        <p className="text-gray-900">{selectedLead.phone_number ? formatPhoneForDisplay(selectedLead.phone_number) : '-'}</p>
                       )}
                     </div>
                     <div>
@@ -1999,7 +2029,7 @@ export default function Dashboard() {
                       </div>
                       <div>
                         <label className="text-sm font-medium text-gray-500">Telefone da Campanha</label>
-                        <p className="text-gray-900">{selectedLead.content.phone}</p>
+                        <p className="text-gray-900">{formatPhoneForDisplay(selectedLead.content.phone)}</p>
                       </div>
                     </div>
                   )}
