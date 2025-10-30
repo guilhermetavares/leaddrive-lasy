@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Check, CreditCard, Calendar, DollarSign, AlertCircle, Crown, Zap, Star } from 'lucide-react';
+import { User, ChevronDown, LogOut, Calendar, DollarSign, CreditCard, ArrowLeft, Eye, Filter, Search, Settings } from 'lucide-react';
+import { useApiCall } from '@/lib/api';
 
 interface UserData {
   id: string;
@@ -12,120 +13,69 @@ interface UserData {
   phone?: string;
   is_trial?: boolean;
   next_payment?: string;
+  trial_expired?: boolean;
 }
 
 interface Payment {
-  id: string;
-  date: string;
+  uuid: string;
+  key: string;
+  account: string;
+  plan: string;
   amount: number;
-  status: 'paid' | 'pending' | 'failed';
-  description: string;
+  created_at: string;
+  updated_at: string;
+}
+
+interface PaymentsResponse {
+  page: number;
+  limit: number;
+  hasNextPage: boolean;
+  items: Payment[];
 }
 
 interface Plan {
-  id: string;
-  name: string;
-  price: number;
-  period: string;
-  features: string[];
-  popular?: boolean;
-  icon: React.ReactNode;
+  key: string;
+  title: string;
+  description: string[];
+  amount: number;
+}
+
+interface PlansResponse {
+  page: number;
+  limit: number;
+  hasNextPage: boolean | null;
+  items: Plan[];
 }
 
 export default function PaymentsPage() {
   const [user, setUser] = useState<UserData | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [plansLoading, setPlansLoading] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [activeTab, setActiveTab] = useState('historico');
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
+  const [limit] = useState(20);
+  
   const router = useRouter();
-
-  // Planos disponíveis
-  const plans: Plan[] = [
-    {
-      id: 'basic',
-      name: 'Básico',
-      price: 29.90,
-      period: 'mês',
-      icon: <Star className="w-6 h-6" />,
-      features: [
-        'Até 1.000 leads por mês',
-        'Dashboard básico',
-        'Suporte por email',
-        '1 campanha ativa',
-        'Relatórios básicos'
-      ]
-    },
-    {
-      id: 'pro',
-      name: 'Profissional',
-      price: 79.90,
-      period: 'mês',
-      popular: true,
-      icon: <Zap className="w-6 h-6" />,
-      features: [
-        'Até 10.000 leads por mês',
-        'Dashboard avançado',
-        'Suporte prioritário',
-        'Campanhas ilimitadas',
-        'Relatórios avançados',
-        'Integração com WhatsApp',
-        'API de integração'
-      ]
-    },
-    {
-      id: 'enterprise',
-      name: 'Empresarial',
-      price: 199.90,
-      period: 'mês',
-      icon: <Crown className="w-6 h-6" />,
-      features: [
-        'Leads ilimitados',
-        'Dashboard personalizado',
-        'Suporte 24/7',
-        'Campanhas ilimitadas',
-        'Relatórios personalizados',
-        'Integração completa',
-        'API avançada',
-        'Gerente de conta dedicado',
-        'Treinamento personalizado'
-      ]
-    }
-  ];
-
-  // Histórico de pagamentos simulado
-  const mockPayments: Payment[] = [
-    {
-      id: '1',
-      date: '2024-01-15',
-      amount: 79.90,
-      status: 'paid',
-      description: 'Plano Profissional - Janeiro 2024'
-    },
-    {
-      id: '2',
-      date: '2023-12-15',
-      amount: 79.90,
-      status: 'paid',
-      description: 'Plano Profissional - Dezembro 2023'
-    },
-    {
-      id: '3',
-      date: '2023-11-15',
-      amount: 79.90,
-      status: 'paid',
-      description: 'Plano Profissional - Novembro 2023'
-    },
-    {
-      id: '4',
-      date: '2023-10-15',
-      amount: 29.90,
-      status: 'failed',
-      description: 'Plano Básico - Outubro 2023'
-    }
-  ];
+  const { makeApiCall } = useApiCall();
 
   useEffect(() => {
     loadUserData();
+    loadPayments();
+    loadPlans();
   }, []);
+
+  useEffect(() => {
+    loadPayments();
+  }, [currentPage]);
 
   const loadUserData = async () => {
     try {
@@ -135,22 +85,13 @@ export default function PaymentsPage() {
         return;
       }
 
-      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/me', {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const response = await makeApiCall('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/me', {
+        method: 'GET'
       });
 
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
-        
-        // Se não for trial, carregar histórico de pagamentos
-        if (!userData.is_trial) {
-          setPayments(mockPayments);
-        }
       } else {
         throw new Error('Falha ao carregar dados do usuário');
       }
@@ -161,59 +102,160 @@ export default function PaymentsPage() {
         id: '1',
         name: 'Usuário Demo',
         email: 'demo@email.com',
-        is_trial: true,
-        next_payment: '2024-01-27'
+        company: 'Empresa Demo'
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const loadPayments = async (page: number = currentPage) => {
+    try {
+      setPaymentsLoading(true);
+      const token = localStorage.getItem('accessToken');
+      if (!token) {
+        router.push('/');
+        return;
+      }
+
+      const response = await makeApiCall(`https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/payments?page=${page}&limit=${limit}`, {
+        method: 'GET'
+      });
+
+      if (response.ok) {
+        const paymentsData: PaymentsResponse = await response.json();
+        
+        if (paymentsData && typeof paymentsData === 'object' && 'items' in paymentsData) {
+          setPayments(paymentsData.items || []);
+          setCurrentPage(paymentsData.page || 1);
+          setHasNextPage(paymentsData.hasNextPage || false);
+          
+          if (paymentsData.hasNextPage) {
+            setTotalPages(paymentsData.page + 1);
+          } else {
+            setTotalPages(paymentsData.page);
+          }
+        } else {
+          setPayments(Array.isArray(paymentsData) ? paymentsData : []);
+          setHasNextPage(false);
+          setTotalPages(1);
+        }
+      } else {
+        throw new Error('Falha ao carregar pagamentos');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar pagamentos:', error);
+      setPayments([]);
+      setHasNextPage(false);
+      setTotalPages(1);
+    } finally {
+      setPaymentsLoading(false);
     }
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'paid': return 'Pago';
-      case 'pending': return 'Pendente';
-      case 'failed': return 'Falhou';
-      default: return status;
+  const loadPlans = async () => {
+    try {
+      setPlansLoading(true);
+      
+      // Nova API sem bearer token
+      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/plans', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const plansData: PlansResponse = await response.json();
+        
+        if (plansData && typeof plansData === 'object' && 'items' in plansData) {
+          setPlans(plansData.items || []);
+        } else {
+          setPlans(Array.isArray(plansData) ? plansData : []);
+        }
+      } else {
+        throw new Error('Falha ao carregar planos');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+      setPlans([]);
+    } finally {
+      setPlansLoading(false);
     }
+  };
+
+  const calculateDaysUntilPayment = (nextPayment: string): number => {
+    const paymentDate = new Date(nextPayment);
+    const today = new Date();
+    const diffTime = paymentDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.max(0, diffDays);
   };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
-      year: 'numeric'
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     });
   };
 
-  const formatCurrency = (amount: number) => {
+  const formatPrice = (amountInCents: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
-    }).format(amount);
+    }).format(amountInCents / 100);
   };
 
-  const handleSelectPlan = (planId: string) => {
-    // Aqui você implementaria a lógica de seleção do plano
-    console.log('Plano selecionado:', planId);
-    // Redirecionar para checkout ou abrir modal de pagamento
+  const getPlanTitle = (planKey: string) => {
+    const plan = plans.find(p => p.key === planKey);
+    return plan ? plan.title : planKey;
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('accessToken');
+    router.push('/');
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (hasNextPage) {
+      const newPage = currentPage + 1;
+      setCurrentPage(newPage);
+      setTotalPages(Math.max(totalPages, newPage));
+    }
+  };
+
+  const handlePrevPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const filteredPayments = payments.filter(payment =>
+    getPlanTitle(payment.plan).toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.key.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    payment.plan.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredPlans = plans.filter(plan =>
+    plan.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    plan.key?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando informações de pagamento...</p>
+          <p className="text-gray-600">Carregando...</p>
         </div>
       </div>
     );
@@ -224,252 +266,360 @@ export default function PaymentsPage() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center h-16">
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="flex items-center text-gray-600 hover:text-gray-900 mr-4"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Voltar ao Dashboard
-            </button>
-            <h1 className="text-xl font-semibold text-gray-900">
-              {user?.is_trial ? 'Escolha seu Plano' : 'Meus Pagamentos'}
-            </h1>
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="flex items-center text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Voltar
+              </button>
+              <h1 className="text-xl font-semibold text-gray-900">Pagamentos</h1>
+            </div>
+            
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="flex items-center space-x-2 text-gray-700 hover:text-gray-900 focus:outline-none"
+              >
+                <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+                <span className="hidden sm:block font-medium">{user?.name || 'Usuário'}</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+
+              {showMenu && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                  <button 
+                    onClick={() => router.push('/dashboard')}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <ArrowLeft className="w-4 h-4 mr-3" />
+                    Dashboard
+                  </button>
+                  <hr className="my-1" />
+                  <button
+                    onClick={handleLogout}
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    <LogOut className="w-4 h-4 mr-3" />
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {user?.is_trial ? (
-          // Mostrar planos para usuários trial
-          <div>
-            <div className="text-center mb-12">
-              <h2 className="text-3xl font-bold text-gray-900 mb-4">
-                Escolha o plano ideal para seu negócio
-              </h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Desbloqueie todo o potencial do LeadManager com nossos planos profissionais.
-                Comece hoje mesmo e transforme seus leads em vendas.
-              </p>
-            </div>
+        {/* Page Header */}
+        <div className="mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Gerenciar Pagamentos</h2>
+          <p className="text-gray-600">Visualize seu histórico de pagamentos e gerencie seus planos.</p>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-              {plans.map((plan) => (
-                <div
-                  key={plan.id}
-                  className={`relative bg-white rounded-2xl shadow-lg border-2 transition-all duration-300 hover:shadow-xl ${
-                    plan.popular 
-                      ? 'border-blue-500 transform scale-105' 
-                      : 'border-gray-200 hover:border-blue-300'
-                  }`}
-                >
-                  {plan.popular && (
-                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                      <span className="bg-blue-500 text-white px-4 py-1 rounded-full text-sm font-medium">
-                        Mais Popular
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="p-8">
-                    <div className="flex items-center justify-center w-12 h-12 bg-blue-100 rounded-lg mb-4 mx-auto">
-                      <div className="text-blue-600">
-                        {plan.icon}
-                      </div>
-                    </div>
-
-                    <h3 className="text-2xl font-bold text-gray-900 text-center mb-2">
-                      {plan.name}
-                    </h3>
-
-                    <div className="text-center mb-6">
-                      <span className="text-4xl font-bold text-gray-900">
-                        {formatCurrency(plan.price)}
-                      </span>
-                      <span className="text-gray-600">/{plan.period}</span>
-                    </div>
-
-                    <ul className="space-y-3 mb-8">
-                      {plan.features.map((feature, index) => (
-                        <li key={index} className="flex items-center">
-                          <Check className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
-                          <span className="text-gray-700">{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-
-                    <button
-                      onClick={() => handleSelectPlan(plan.id)}
-                      className={`w-full py-3 px-6 rounded-lg font-medium transition-colors ${
-                        plan.popular
-                          ? 'bg-blue-600 text-white hover:bg-blue-700'
-                          : 'bg-gray-100 text-gray-900 hover:bg-gray-200'
-                      }`}
-                    >
-                      Escolher {plan.name}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Garantia e Suporte */}
-            <div className="bg-white rounded-lg shadow p-8 text-center">
-              <div className="flex items-center justify-center space-x-8 mb-6">
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mr-3">
-                    <Check className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Garantia de 30 dias</p>
-                    <p className="text-sm text-gray-600">Satisfação garantida</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
-                    <CreditCard className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Pagamento seguro</p>
-                    <p className="text-sm text-gray-600">Dados protegidos</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center">
-                  <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                    <AlertCircle className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-medium text-gray-900">Suporte dedicado</p>
-                    <p className="text-sm text-gray-600">Ajuda quando precisar</p>
-                  </div>
-                </div>
+        {/* Trial Status Card */}
+        {user?.is_trial && (
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-6 mb-8">
+            <div className="flex items-center">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <Calendar className="w-6 h-6 text-orange-600" />
               </div>
-            </div>
-          </div>
-        ) : (
-          // Mostrar histórico de pagamentos para usuários não-trial
-          <div>
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Histórico de Pagamentos</h2>
-              <p className="text-gray-600">
-                Acompanhe todos os seus pagamentos e faturas do LeadManager.
-              </p>
-            </div>
-
-            {/* Resumo */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-green-100 rounded-lg">
-                    <DollarSign className="w-6 h-6 text-green-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Total Pago</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {formatCurrency(payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + p.amount, 0))}
-                    </p>
-                  </div>
-                </div>
+              <div className="ml-4 flex-1">
+                <h3 className="text-lg font-medium text-orange-900">Status do Trial</h3>
+                <p className="text-orange-700">
+                  {user.next_payment 
+                    ? `Seu período de teste expira em ${calculateDaysUntilPayment(user.next_payment)} dias`
+                    : 'Período de teste ativo'
+                  }
+                </p>
               </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-blue-100 rounded-lg">
-                    <Calendar className="w-6 h-6 text-blue-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Próximo Pagamento</p>
-                    <p className="text-2xl font-bold text-gray-900">
-                      {user?.next_payment ? formatDate(user.next_payment) : '-'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg shadow p-6">
-                <div className="flex items-center">
-                  <div className="p-2 bg-purple-100 rounded-lg">
-                    <CreditCard className="w-6 h-6 text-purple-600" />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Plano Atual</p>
-                    <p className="text-2xl font-bold text-gray-900">Profissional</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Lista de Pagamentos */}
-            <div className="bg-white rounded-lg shadow">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h3 className="text-lg font-medium text-gray-900">Histórico de Transações</h3>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Data
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Descrição
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Valor
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        Status
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {payments.map((payment) => (
-                      <tr key={payment.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatDate(payment.date)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {payment.description}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                          {formatCurrency(payment.amount)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(payment.status)}`}>
-                            {getStatusText(payment.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {payments.length === 0 && (
-                <div className="text-center py-12">
-                  <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Nenhum pagamento encontrado</p>
-                </div>
-              )}
-            </div>
-
-            {/* Ações */}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <button className="flex items-center justify-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-                <CreditCard className="w-5 h-5 mr-2" />
-                Alterar Método de Pagamento
-              </button>
-              <button className="flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                <Calendar className="w-5 h-5 mr-2" />
-                Alterar Plano
+              <button 
+                onClick={() => setActiveTab('planos')}
+                className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors"
+              >
+                Escolher Plano
               </button>
             </div>
           </div>
         )}
+
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="border-b border-gray-200">
+            <nav className="flex space-x-8 px-6">
+              {['historico', 'planos'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
+                    activeTab === tab
+                      ? 'border-blue-500 text-blue-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  }`}
+                >
+                  {tab === 'historico' ? 'Histórico de Pagamentos' : 'Planos Disponíveis'}
+                </button>
+              ))}
+            </nav>
+          </div>
+
+          {/* Content Area */}
+          <div className="p-6">
+            {activeTab === 'historico' && (
+              <div>
+                {/* Search and Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Buscar pagamentos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                    />
+                  </div>
+                  <div className="flex space-x-3">
+                    <button 
+                      onClick={() => loadPayments(currentPage)}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      disabled={paymentsLoading}
+                    >
+                      {paymentsLoading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      ) : (
+                        <Settings className="w-4 h-4 mr-2" />
+                      )}
+                      Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Payments List */}
+                {paymentsLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando pagamentos...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 gap-4">
+                      {filteredPayments.length === 0 ? (
+                        <div className="col-span-full text-center py-12">
+                          <div className="p-4">
+                            <CreditCard className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                            <p className="text-gray-500 text-lg font-medium mb-2">Nenhum pagamento encontrado</p>
+                            <p className="text-gray-400">Seus pagamentos aparecerão aqui quando realizados.</p>
+                          </div>
+                        </div>
+                      ) : (
+                        filteredPayments.map((payment) => (
+                          <div key={payment.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                            <div className="space-y-3">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-medium text-gray-900 truncate">
+                                    {getPlanTitle(payment.plan)}
+                                  </h3>
+                                  <p className="text-sm text-gray-600 truncate">
+                                    ID: {payment.key}
+                                  </p>
+                                  <p className="text-sm text-gray-600 truncate">
+                                    Plano: {payment.plan}
+                                  </p>
+                                </div>
+                                <div className="text-right">
+                                  <span className="text-lg font-semibold text-gray-900">
+                                    {formatPrice(payment.amount)}
+                                  </span>
+                                  <p className="text-sm text-gray-500">
+                                    {payment.amount === 0 ? 'Gratuito' : 'Pago'}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span className="flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Criado: {formatDate(payment.created_at)}
+                                </span>
+                                <span className="flex items-center">
+                                  <Calendar className="w-3 h-3 mr-1" />
+                                  Atualizado: {formatDate(payment.updated_at)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Pagination */}
+                    {(totalPages > 1 || hasNextPage) && (
+                      <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
+                        <div className="flex items-center text-sm text-gray-500">
+                          <span>Página {currentPage} {totalPages > 1 && `de ${totalPages}`}</span>
+                          <span className="ml-4">{filteredPayments.length} pagamentos exibidos</span>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={handlePrevPage}
+                            disabled={currentPage === 1}
+                            className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Anterior
+                          </button>
+                          
+                          <div className="flex items-center space-x-1">
+                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                              const pageNum = Math.max(1, currentPage - 2) + i;
+                              if (pageNum > totalPages) return null;
+                              
+                              return (
+                                <button
+                                  key={pageNum}
+                                  onClick={() => handlePageChange(pageNum)}
+                                  className={`px-3 py-2 text-sm font-medium rounded-lg ${
+                                    pageNum === currentPage
+                                      ? 'bg-blue-600 text-white'
+                                      : 'text-gray-500 bg-white border border-gray-300 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {pageNum}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          
+                          <button
+                            onClick={handleNextPage}
+                            disabled={!hasNextPage}
+                            className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Próxima
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'planos' && (
+              <div>
+                {/* Search and Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Buscar planos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                    />
+                  </div>
+                  <div className="flex space-x-3">
+                    <button 
+                      onClick={() => loadPlans()}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      disabled={plansLoading}
+                    >
+                      {plansLoading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      ) : (
+                        <Settings className="w-4 h-4 mr-2" />
+                      )}
+                      Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Plans List */}
+                {plansLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando planos...</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredPlans.length === 0 ? (
+                      <div className="col-span-full text-center py-12">
+                        <p className="text-gray-500">Nenhum plano encontrado</p>
+                      </div>
+                    ) : (
+                      filteredPlans.map((plan) => (
+                        <div key={plan.key} className={`border rounded-lg p-6 transition-all hover:shadow-lg ${
+                          plan.key === 'standard' 
+                            ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' 
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}>
+                          <div className="space-y-4">
+                            {plan.key === 'standard' && (
+                              <div className="bg-blue-600 text-white text-xs font-medium px-3 py-1 rounded-full text-center">
+                                RECOMENDADO
+                              </div>
+                            )}
+                            
+                            <div className="text-center">
+                              <h3 className="text-xl font-semibold text-gray-900">{plan.title}</h3>
+                              <div className="mt-2">
+                                <span className="text-3xl font-bold text-gray-900">
+                                  {formatPrice(plan.amount)}
+                                </span>
+                                {plan.amount > 0 && (
+                                  <span className="text-gray-600">/mês</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {plan.description.map((feature, index) => (
+                                <div key={index} className="flex items-center text-sm text-gray-600">
+                                  <div className="w-2 h-2 bg-blue-600 rounded-full mr-3 flex-shrink-0"></div>
+                                  {feature}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <button 
+                              className={`w-full py-3 px-4 rounded-lg font-medium transition-colors ${
+                                plan.key === 'trial' 
+                                  ? 'bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-not-allowed'
+                                  : plan.key === 'standard'
+                                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                  : 'bg-gray-600 text-white hover:bg-gray-700'
+                              }`}
+                              disabled={plan.key === 'trial'}
+                            >
+                              {plan.key === 'trial' ? 'Plano Atual' : 'Escolher Plano'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </main>
+
+      {/* Click outside to close menu */}
+      {showMenu && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setShowMenu(false)}
+        />
+      )}
     </div>
   );
 }

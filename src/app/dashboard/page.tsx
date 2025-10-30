@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star } from 'lucide-react';
+import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star, Code } from 'lucide-react';
 import { useApiCall } from '@/lib/api';
 import { formatPhoneForDisplay, formatPhoneForApi, applyPhoneMask, isValidPhone } from '@/lib/phone-utils';
 
@@ -134,11 +134,26 @@ interface SellersResponse {
   items: Seller[];
 }
 
+interface Plan {
+  key: string;
+  title: string;
+  description: string[];
+  amount: number;
+}
+
+interface PlansResponse {
+  page: number;
+  limit: number;
+  hasNextPage: boolean | null;
+  items: Plan[];
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<UserData | null>(null);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [sellers, setSellers] = useState<Seller[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [selectedLead, setSelectedLead] = useState<LeadDetail | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
   const [selectedSeller, setSelectedSeller] = useState<Seller | null>(null);
@@ -146,6 +161,7 @@ export default function Dashboard() {
   const [leadsLoading, setLeadsLoading] = useState(false);
   const [campaignsLoading, setCampaignsLoading] = useState(false);
   const [sellersLoading, setSellersLoading] = useState(false);
+  const [plansLoading, setPlansLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [activeTab, setActiveTab] = useState('leads');
@@ -235,6 +251,8 @@ export default function Dashboard() {
       loadCampaigns();
     } else if (activeTab === 'vendedores') {
       loadSellers();
+    } else if (activeTab === 'planos') {
+      loadPlans();
     }
   }, [activeTab, campaignCurrentPage, sellerCurrentPage]);
 
@@ -447,6 +465,38 @@ export default function Dashboard() {
       setSellerTotalPages(1);
     } finally {
       setSellersLoading(false);
+    }
+  };
+
+  const loadPlans = async () => {
+    try {
+      setPlansLoading(true);
+      
+      // Nova API sem bearer token
+      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/plans', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const plansData: PlansResponse = await response.json();
+        
+        if (plansData && typeof plansData === 'object' && 'items' in plansData) {
+          setPlans(plansData.items || []);
+        } else {
+          setPlans(Array.isArray(plansData) ? plansData : []);
+        }
+      } else {
+        throw new Error('Falha ao carregar planos');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+      setError('Erro ao carregar planos');
+      setPlans([]);
+    } finally {
+      setPlansLoading(false);
     }
   };
 
@@ -702,6 +752,18 @@ export default function Dashboard() {
     // Aqui você pode adicionar uma notificação de sucesso
   };
 
+  const generateScriptExample = (scriptUrl: string) => {
+    return `<!-- Adicione este script no seu site -->
+<script src="${scriptUrl}"></script>
+
+<!-- Ou importe via JavaScript -->
+<script>
+  const script = document.createElement('script');
+  script.src = '${scriptUrl}';
+  document.head.appendChild(script);
+</script>`;
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     router.push('/');
@@ -853,6 +915,13 @@ export default function Dashboard() {
     });
   };
 
+  const formatPrice = (amountInCents: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(amountInCents / 100);
+  };
+
   const filteredLeads = leads.filter(lead =>
     (lead.content?.name?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
     (lead.location?.city?.toLowerCase().includes(searchTerm.toLowerCase()) || false) ||
@@ -871,6 +940,11 @@ export default function Dashboard() {
     seller.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     seller.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     seller.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredPlans = plans.filter(plan =>
+    plan.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    plan.key?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const stats = {
@@ -900,21 +974,6 @@ export default function Dashboard() {
             <div className="flex items-center">
               <h1 className="text-xl font-semibold text-gray-900">LeaDrive</h1>
             </div>
-            
-            {/* Trial Warning */}
-            {user?.is_trial && user?.next_payment && (
-              <div className="flex-1 mx-8">
-                <button
-                  onClick={() => router.push('/payments')}
-                  className="w-full bg-orange-100 border border-orange-200 rounded-lg px-4 py-2 flex items-center justify-center space-x-2 hover:bg-orange-200 transition-colors"
-                >
-                  <AlertTriangle className="w-4 h-4 text-orange-600" />
-                  <span className="text-orange-800 font-medium">
-                    Seu trial se encerra em {calculateDaysUntilPayment(user.next_payment)} dias
-                  </span>
-                </button>
-              </div>
-            )}
             
             <div className="relative">
               <button
@@ -965,6 +1024,23 @@ export default function Dashboard() {
           </div>
         </div>
       </header>
+
+      {/* Trial Warning Banner - Moved below header */}
+      {user?.is_trial && user?.next_payment && (
+        <div className="bg-orange-100 border-b border-orange-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <button
+              onClick={() => router.push('/payments')}
+              className="w-full py-3 flex items-center justify-center space-x-2 hover:bg-orange-200 transition-colors"
+            >
+              <AlertTriangle className="w-5 h-5 text-orange-600" />
+              <span className="text-orange-800 font-medium">
+                Seu trial se encerra em {calculateDaysUntilPayment(user.next_payment)} dias - Clique aqui para escolher um plano
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1029,7 +1105,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-lg shadow">
           <div className="border-b border-gray-200">
             <nav className="flex space-x-8 px-6">
-              {['leads', 'campanhas', 'vendedores'].map((tab) => (
+              {['leads', 'campanhas', 'vendedores', 'planos'].map((tab) => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
@@ -1345,7 +1421,7 @@ export default function Dashboard() {
                       ) : (
                         filteredCampaigns.map((campaign) => (
                           <div key={campaign.uuid} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                               <div className="flex items-start justify-between">
                                 <div className="flex-1 min-w-0">
                                   <h3 className="font-medium text-gray-900 truncate">{campaign.name}</h3>
@@ -1363,6 +1439,26 @@ export default function Dashboard() {
                                 </span>
                               </div>
                               
+                              {/* Script Example Block */}
+                              <div className="bg-gray-900 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div className="flex items-center space-x-2">
+                                    <Code className="w-4 h-4 text-gray-400" />
+                                    <span className="text-sm font-medium text-gray-300">Como usar este script:</span>
+                                  </div>
+                                  <button 
+                                    onClick={() => navigator.clipboard.writeText(generateScriptExample(campaign.script))}
+                                    className="flex items-center text-blue-400 hover:text-blue-300 text-sm"
+                                  >
+                                    <Copy className="w-3 h-3 mr-1" />
+                                    Copiar
+                                  </button>
+                                </div>
+                                <pre className="text-xs text-gray-300 overflow-x-auto">
+                                  <code>{generateScriptExample(campaign.script)}</code>
+                                </pre>
+                              </div>
+                              
                               <div className="flex items-center justify-between text-xs text-gray-500">
                                 <span className="flex items-center">
                                   <Calendar className="w-3 h-3 mr-1" />
@@ -1374,7 +1470,7 @@ export default function Dashboard() {
                                     className="flex items-center text-blue-600 hover:text-blue-800"
                                   >
                                     <Copy className="w-3 h-3 mr-1" />
-                                    Script
+                                    URL do Script
                                   </button>
                                   <button 
                                     onClick={() => loadCampaignDetail(campaign.uuid)}
@@ -1589,6 +1685,92 @@ export default function Dashboard() {
                       </div>
                     )}
                   </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'planos' && (
+              <div>
+                {/* Search and Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-4 sm:space-y-0">
+                  <div className="relative flex-1 max-w-md">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      placeholder="Buscar planos..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full"
+                    />
+                  </div>
+                  <div className="flex space-x-3">
+                    <button 
+                      onClick={() => loadPlans()}
+                      className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                      disabled={plansLoading}
+                    >
+                      {plansLoading ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      ) : (
+                        <Settings className="w-4 h-4 mr-2" />
+                      )}
+                      Atualizar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Plans List */}
+                {plansLoading ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Carregando planos...</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredPlans.length === 0 ? (
+                      <div className="col-span-full text-center py-12">
+                        <p className="text-gray-500">Nenhum plano encontrado</p>
+                      </div>
+                    ) : (
+                      filteredPlans.map((plan) => (
+                        <div key={plan.key} className="border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
+                          <div className="space-y-4">
+                            <div className="text-center">
+                              <h3 className="text-xl font-semibold text-gray-900">{plan.title}</h3>
+                              <div className="mt-2">
+                                <span className="text-3xl font-bold text-gray-900">
+                                  {formatPrice(plan.amount)}
+                                </span>
+                                {plan.amount > 0 && (
+                                  <span className="text-gray-600">/mês</span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {plan.description.map((feature, index) => (
+                                <div key={index} className="flex items-center text-sm text-gray-600">
+                                  <div className="w-2 h-2 bg-blue-600 rounded-full mr-3 flex-shrink-0"></div>
+                                  {feature}
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <button 
+                              onClick={() => router.push('/payments')}
+                              className={`w-full py-2 px-4 rounded-lg font-medium transition-colors ${
+                                plan.key === 'trial' 
+                                  ? 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                                  : 'bg-blue-600 text-white hover:bg-blue-700'
+                              }`}
+                            >
+                              {plan.key === 'trial' ? 'Plano Atual' : 'Escolher Plano'}
+                            </button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 )}
               </div>
             )}

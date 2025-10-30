@@ -1,9 +1,68 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Users, BarChart3, Target, Zap, CheckCircle, Star } from 'lucide-react';
 
+interface Plan {
+  key: string;
+  title: string;
+  description: string[];
+  amount: number;
+}
+
+interface PlansResponse {
+  page: number;
+  limit: number;
+  hasNextPage: boolean | null;
+  items: Plan[];
+}
+
 export default function Home() {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansLoading, setPlansLoading] = useState(true);
+
+  useEffect(() => {
+    loadPlans();
+  }, []);
+
+  const loadPlans = async () => {
+    try {
+      setPlansLoading(true);
+      
+      const response = await fetch('https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/plans', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const plansData: PlansResponse = await response.json();
+        
+        if (plansData && typeof plansData === 'object' && 'items' in plansData) {
+          setPlans(plansData.items || []);
+        } else {
+          setPlans(Array.isArray(plansData) ? plansData : []);
+        }
+      } else {
+        throw new Error('Falha ao carregar planos');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar planos:', error);
+      setPlans([]);
+    } finally {
+      setPlansLoading(false);
+    }
+  };
+
+  const formatPrice = (amountInCents: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(amountInCents / 100);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -156,128 +215,61 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-            {/* Plano Starter */}
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Starter</h3>
-                <p className="text-gray-600 mb-6">Ideal para começar</p>
-                <div className="mb-8">
-                  <span className="text-4xl font-bold text-blue-600">R$ 97</span>
-                  <span className="text-gray-600">/mês</span>
-                </div>
-                <ul className="text-left space-y-4 mb-8">
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Até 1.000 leads</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">3 usuários</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Dashboard básico</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Suporte por email</span>
-                  </li>
-                </ul>
-                <Link 
-                  href="/cadastro" 
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold block text-center"
-                >
-                  Começar Agora
-                </Link>
-              </div>
+          {plansLoading ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Carregando planos...</p>
             </div>
-
-            {/* Plano Professional */}
-            <div className="bg-blue-600 rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow relative">
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                <span className="bg-yellow-400 text-yellow-900 px-4 py-1 rounded-full text-sm font-semibold">
-                  Mais Popular
-                </span>
-              </div>
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-white mb-2">Professional</h3>
-                <p className="text-blue-100 mb-6">Para empresas em crescimento</p>
-                <div className="mb-8">
-                  <span className="text-4xl font-bold text-white">R$ 197</span>
-                  <span className="text-blue-100">/mês</span>
-                </div>
-                <ul className="text-left space-y-4 mb-8">
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
-                    <span className="text-blue-100">Até 10.000 leads</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
-                    <span className="text-blue-100">10 usuários</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
-                    <span className="text-blue-100">Automações avançadas</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
-                    <span className="text-blue-100">Analytics completo</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-400 mr-3" />
-                    <span className="text-blue-100">Suporte prioritário</span>
-                  </li>
-                </ul>
-                <Link 
-                  href="/cadastro" 
-                  className="w-full bg-white text-blue-600 py-3 rounded-lg hover:bg-gray-50 transition-colors font-semibold block text-center"
+          ) : (
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-5xl mx-auto">
+              {plans.map((plan, index) => (
+                <div 
+                  key={plan.key} 
+                  className={`bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow relative ${
+                    plan.key === 'standard' ? 'border-2 border-blue-500' : ''
+                  }`}
                 >
-                  Começar Agora
-                </Link>
-              </div>
-            </div>
-
-            {/* Plano Enterprise */}
-            <div className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-xl transition-shadow">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">Enterprise</h3>
-                <p className="text-gray-600 mb-6">Para grandes empresas</p>
-                <div className="mb-8">
-                  <span className="text-4xl font-bold text-blue-600">R$ 497</span>
-                  <span className="text-gray-600">/mês</span>
+                  {plan.key === 'standard' && (
+                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                      <span className="bg-blue-600 text-white px-4 py-1 rounded-full text-sm font-semibold">
+                        Mais Popular
+                      </span>
+                    </div>
+                  )}
+                  
+                  <div className="text-center">
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">{plan.title}</h3>
+                    <div className="mb-8">
+                      <span className="text-4xl font-bold text-blue-600">
+                        {formatPrice(plan.amount)}
+                      </span>
+                      {plan.amount > 0 && (
+                        <span className="text-gray-600">/mês</span>
+                      )}
+                    </div>
+                    <ul className="text-left space-y-4 mb-8">
+                      {plan.description.map((feature, featureIndex) => (
+                        <li key={featureIndex} className="flex items-center">
+                          <CheckCircle className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" />
+                          <span className="text-gray-700">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Link 
+                      href="/cadastro" 
+                      className={`w-full py-3 rounded-lg font-semibold block text-center transition-colors ${
+                        plan.key === 'standard'
+                          ? 'bg-blue-600 text-white hover:bg-blue-700'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {plan.key === 'trial' ? 'Começar Teste Grátis' : 'Começar Agora'}
+                    </Link>
+                  </div>
                 </div>
-                <ul className="text-left space-y-4 mb-8">
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Leads ilimitados</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Usuários ilimitados</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">API personalizada</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Integrações customizadas</span>
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                    <span className="text-gray-700">Suporte 24/7</span>
-                  </li>
-                </ul>
-                <Link 
-                  href="/cadastro" 
-                  className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold block text-center"
-                >
-                  Começar Agora
-                </Link>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
       </section>
 
