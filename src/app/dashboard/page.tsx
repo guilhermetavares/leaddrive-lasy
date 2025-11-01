@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star, Code } from 'lucide-react';
+import { User, ChevronDown, Settings, CreditCard, LogOut, Search, Filter, Users, TrendingUp, MousePointer, DollarSign, MapPin, Smartphone, Globe, Calendar, Eye, ExternalLink, ChevronLeft, ChevronRight, Plus, Edit, Trash2, Copy, Mail, Phone, AlertTriangle, Save, X, Lock, Star, Code, EyeOff } from 'lucide-react';
 import { useApiCall } from '@/lib/api';
 import { formatPhoneForDisplay, formatPhoneForApi, applyPhoneMask, isValidPhone } from '@/lib/phone-utils';
 
@@ -182,6 +182,7 @@ export default function Dashboard() {
   const [isEditingLead, setIsEditingLead] = useState(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showSellerPassword, setShowSellerPassword] = useState(false);
   
   // Dashboard stats from API
   const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
@@ -230,6 +231,17 @@ export default function Dashboard() {
     phone: '',
     message: '',
     link: 'https://api.whatsapp.com/send',
+    email: '',
+    password: '',
+    active: true
+  });
+
+  // Original seller data for comparison
+  const [originalSellerData, setOriginalSellerData] = useState({
+    name: '',
+    phone: '',
+    message: '',
+    link: '',
     email: '',
     password: '',
     active: true
@@ -675,7 +687,8 @@ export default function Dashboard() {
       if (response.ok) {
         const sellerDetail = await response.json();
         setSelectedSeller(sellerDetail);
-        setSellerForm({
+        
+        const formData = {
           name: sellerDetail.name,
           phone: sellerDetail.phone,
           message: sellerDetail.message,
@@ -683,7 +696,10 @@ export default function Dashboard() {
           email: sellerDetail.email,
           password: sellerDetail.password,
           active: sellerDetail.active
-        });
+        };
+        
+        setSellerForm(formData);
+        setOriginalSellerData(formData); // Armazenar dados originais para comparação
         setIsEditingSeller(true);
         setShowSellerModal(true);
       } else {
@@ -708,7 +724,7 @@ export default function Dashboard() {
   };
 
   const handleCreateSeller = () => {
-    setSellerForm({
+    const formData = {
       name: '',
       phone: '',
       message: '',
@@ -716,10 +732,14 @@ export default function Dashboard() {
       email: '',
       password: '',
       active: true
-    });
+    };
+    
+    setSellerForm(formData);
+    setOriginalSellerData(formData);
     setSelectedSeller(null);
     setIsEditingSeller(false);
     setShowSellerModal(true);
+    setShowSellerPassword(false);
   };
 
   const handleSaveCampaign = async () => {
@@ -760,11 +780,33 @@ export default function Dashboard() {
       const token = localStorage.getItem('accessToken');
       if (!token) return;
 
-      // Converter telefone para formato da API antes de enviar
-      const sellerDataToSend = {
-        ...sellerForm,
-        phone: sellerForm.phone ? formatPhoneForApi(sellerForm.phone) : sellerForm.phone
-      };
+      let sellerDataToSend: any = {};
+
+      if (isEditingSeller) {
+        // Para edição, enviar apenas campos alterados
+        Object.keys(sellerForm).forEach(key => {
+          const formKey = key as keyof typeof sellerForm;
+          if (sellerForm[formKey] !== originalSellerData[formKey]) {
+            if (formKey === 'phone' && sellerForm[formKey]) {
+              sellerDataToSend[formKey] = formatPhoneForApi(sellerForm[formKey]);
+            } else {
+              sellerDataToSend[formKey] = sellerForm[formKey];
+            }
+          }
+        });
+
+        // Se nenhum campo foi alterado, não enviar nada
+        if (Object.keys(sellerDataToSend).length === 0) {
+          setShowSellerModal(false);
+          return;
+        }
+      } else {
+        // Para criação, enviar todos os campos
+        sellerDataToSend = {
+          ...sellerForm,
+          phone: sellerForm.phone ? formatPhoneForApi(sellerForm.phone) : sellerForm.phone
+        };
+      }
 
       const url = isEditingSeller 
         ? `https://y3c7214nh2.execute-api.us-east-1.amazonaws.com/sellers/${selectedSeller?.uuid}`
@@ -779,6 +821,7 @@ export default function Dashboard() {
 
       if (response.ok) {
         setShowSellerModal(false);
+        setShowSellerPassword(false);
         loadSellers(sellerCurrentPage);
       } else {
         throw new Error('Falha ao salvar vendedor');
@@ -2003,67 +2046,87 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Seller Modal */}
+      {/* Seller Modal - Responsivo e com visualização de senha */}
       {showSellerModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-md w-full">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-lg w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
                   {isEditingSeller ? 'Editar Vendedor' : 'Novo Vendedor'}
                 </h2>
                 <button
-                  onClick={() => setShowSellerModal(false)}
+                  onClick={() => {
+                    setShowSellerModal(false);
+                    setShowSellerPassword(false);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
-                  ✕
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
-                <input
-                  type="text"
-                  value={sellerForm.name}
-                  onChange={(e) => setSellerForm({...sellerForm, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: João Silva"
-                />
+            <div className="p-4 sm:p-6 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                  <input
+                    type="text"
+                    value={sellerForm.name}
+                    onChange={(e) => setSellerForm({...sellerForm, name: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="Ex: João Silva"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    value={sellerForm.email}
+                    onChange={(e) => setSellerForm({...sellerForm, email: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="Ex: joao@email.com"
+                  />
+                </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                <input
-                  type="email"
-                  value={sellerForm.email}
-                  onChange={(e) => setSellerForm({...sellerForm, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ex: joao@email.com"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
-                <input
-                  type="text"
-                  value={sellerForm.phone}
-                  onChange={(e) => setSellerForm({...sellerForm, phone: applyPhoneMask(e.target.value)})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="+55 (16) 99349-1807"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
-                <input
-                  type="password"
-                  value={sellerForm.password}
-                  onChange={(e) => setSellerForm({...sellerForm, password: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Digite a senha"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+                  <input
+                    type="text"
+                    value={sellerForm.phone}
+                    onChange={(e) => setSellerForm({...sellerForm, phone: applyPhoneMask(e.target.value)})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    placeholder="+55 (16) 99349-1807"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+                  <div className="relative">
+                    <input
+                      type={showSellerPassword ? "text" : "password"}
+                      value={sellerForm.password}
+                      onChange={(e) => setSellerForm({...sellerForm, password: e.target.value})}
+                      className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                      placeholder="Digite a senha"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSellerPassword(!showSellerPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    >
+                      {showSellerPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
               </div>
               
               <div>
@@ -2071,7 +2134,7 @@ export default function Dashboard() {
                 <textarea
                   value={sellerForm.message}
                   onChange={(e) => setSellerForm({...sellerForm, message: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   rows={3}
                   placeholder="Ex: Que bom que gostou, entre em contato"
                 />
@@ -2083,7 +2146,7 @@ export default function Dashboard() {
                   type="text"
                   value={sellerForm.link}
                   onChange={(e) => setSellerForm({...sellerForm, link: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   placeholder="https://api.whatsapp.com/send"
                 />
               </div>
@@ -2102,16 +2165,19 @@ export default function Dashboard() {
               </div>
             </div>
             
-            <div className="p-6 border-t border-gray-200 flex justify-end space-x-3">
+            <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-3">
               <button
-                onClick={() => setShowSellerModal(false)}
-                className="px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                onClick={() => {
+                  setShowSellerModal(false);
+                  setShowSellerPassword(false);
+                }}
+                className="w-full sm:w-auto px-4 py-2 text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleSaveSeller}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                className="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
               >
                 {isEditingSeller ? 'Salvar' : 'Criar'}
               </button>
